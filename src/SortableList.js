@@ -29,6 +29,7 @@ export default class SortableList extends Component {
 
     renderRow: PropTypes.func.isRequired,
     renderFooter: PropTypes.func,
+    renderHeader: PropTypes.func,
 
     onChangeOrder: PropTypes.func,
     onActivateRow: PropTypes.func,
@@ -78,6 +79,12 @@ export default class SortableList extends Component {
     if (this.props.renderFooter && !this.props.horizontal) {
       this._footerLayout = new Promise((resolve) => {
         this._resolveFooterLayout = resolve;
+      });
+    }
+
+    if (this.props.renderHeader && !this.props.horizontal) {
+      this._headerLayout = new Promise((resolve) => {
+        this._resolveHeaderLayout = resolve;
       });
     }
   }
@@ -198,6 +205,7 @@ export default class SortableList extends Component {
           scrollEventThrottle={2}
           scrollEnabled={scrollEnabled}
           onScroll={this._onScroll}>
+            {this._renderHeader()}
           <View style={innerContainerStyle}>
             {this._renderRows()}
           </View>
@@ -278,9 +286,23 @@ export default class SortableList extends Component {
     );
   }
 
+  _renderHeader() {
+    if (!this.props.renderHeader || this.props.horizontal) {
+      return null;
+    }
+
+    const {headerLayout} = this.state;
+
+    return (
+      <View onLayout={!headerLayout ? this._onLayoutHeader : null}>
+        {this.props.renderHeader()}
+      </View>
+    );
+  }
+
   _onUpdateLayouts() {
-    Promise.all([this._footerLayout, ...Object.values(this._rowsLayouts)])
-      .then(([footerLayout, ...rowsLayouts]) => {
+    Promise.all([this._footerLayout,this._headerLayout, ...Object.values(this._rowsLayouts)])
+      .then(([footerLayout,headerLayout, ...rowsLayouts]) => {
         // Can get correct container’s layout only after rows’s layouts.
         this._container.measure((x, y, width, height, pageX, pageY) => {
           const rowsLayoutsByKey = {};
@@ -297,6 +319,7 @@ export default class SortableList extends Component {
             containerLayout: {x, y, width, height, pageX, pageY},
             rowsLayouts: rowsLayoutsByKey,
             footerLayout,
+            headerLayout,
             contentHeight,
             contentWidth,
           }, () => {
@@ -453,12 +476,13 @@ export default class SortableList extends Component {
             contentWidth,
             containerLayout,
             footerLayout = {height: 0},
+            headerLayout = {height: 0},
           } = this.state;
 
           if (horizontal) {
             return this._contentOffset.x < contentWidth - containerLayout.width
           } else {
-            return this._contentOffset.y < contentHeight + footerLayout.height - containerLayout.height;
+            return this._contentOffset.y < contentHeight + footerLayout.height + headerLayout.height - containerLayout.height;
           }
         },
         getScrollStep: (stepIndex) => {
@@ -468,6 +492,7 @@ export default class SortableList extends Component {
             contentWidth,
             containerLayout,
             footerLayout = {height: 0},
+            headerLayout = {height: 0},
           } = this.state;
 
           if (horizontal) {
@@ -475,7 +500,7 @@ export default class SortableList extends Component {
               ? contentWidth - containerLayout.width - this._contentOffset.x
               : nextStep;
           } else {
-            const scrollHeight = contentHeight + footerLayout.height - containerLayout.height;
+            const scrollHeight = contentHeight + footerLayout.height + headerLayout.height - containerLayout.height;
 
             return this._contentOffset.y + nextStep > scrollHeight
               ? scrollHeight - this._contentOffset.y
@@ -524,6 +549,10 @@ export default class SortableList extends Component {
 
   _onLayoutFooter = ({nativeEvent: {layout}}) => {
     this._resolveFooterLayout(layout);
+  };
+
+  _onLayoutHeader = ({nativeEvent: {layout}}) => {
+    this._resolveHeaderLayout(layout);
   };
 
   _onActivateRow = (rowKey, index, e, gestureState, location) => {
